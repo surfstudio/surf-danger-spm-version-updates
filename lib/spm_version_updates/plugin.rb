@@ -36,12 +36,11 @@ module Danger
     # @param   [String] xcodeproj_path
     #          The path to your Xcode project
     # @return   [void]
-    def check_for_updates(xcodeproj_path)
+    def check_for_updates(xcodeproj_path, where_to_search_local_packages = ".")
       raise(XcodeprojPathMustBeSet) if xcodeproj_path.nil?
 
       project = Xcodeproj::Project.open(xcodeproj_path)
-      packages = get_local_packages() + filter_remote_packages(project)
-      #remote_packages = filter_remote_packages(project)
+      packages = get_local_packages(where_to_search_local_packages) + filter_remote_packages(project)
 
       resolved_path = find_packages_resolved(xcodeproj_path)
       raise(CouldNotFindResolvedFile) unless File.exist?(resolved_path)
@@ -117,7 +116,7 @@ module Danger
     end
 
     # Find the configured SPM dependencies in the xcodeproj
-    # @return [Hash<String, Hash>]
+    # @return [String, Hash<String, String>]
     def filter_remote_packages(project)
       project.objects
         .select { |obj|

@@ -1,10 +1,12 @@
-def get_local_packages
-  get_manifests.flat_map { |manifest| get_dependencies(manifest) }
+def get_local_packages(where_to_search_local_packages)
+  get_manifests(where_to_search_local_packages)
+    .flat_map { |manifest| get_dependencies(manifest) }
 end
 
-def get_manifests
+def get_manifests(where_to_search_local_packages)
   # Do not parse files added at build phase
-  Dir.glob("**/Package.swift").reject { |manifest| manifest.start_with?("buildData/") }
+  Dir.glob("#{where_to_search_local_packages}/**/Package.swift")
+    .reject { |manifest| manifest.start_with?("buildData/") }
 end
 
 def get_dependencies(manifest)
