@@ -48,18 +48,18 @@ module Danger
       resolved_versions = JSON.load_file!(resolved_path)["pins"]
         .to_h { |pin|
           [
-            pin["location"], 
+            pin["location"],
             [
-              pin["state"]["version"] || pin["state"]["revision"], 
-              pin["state"]["branch"]
-            ]
-          ]   
+              pin["state"]["version"] || pin["state"]["revision"],
+              pin["state"]["branch"],
+            ],
+          ]
         }
 
       packages.each { |repository_url, requirement|
         next if ignore_repos&.include?(repository_url)
 
-        name = "(#{requirement.fetch("package_name", "project")}) #{repo_name(repository_url)}"
+        name = "(#{requirement.fetch('package_name', 'project')}) #{repo_name(repository_url)}"
         kind = requirement["kind"]
 
         resolved_version = resolved_versions[repository_url]
@@ -69,16 +69,16 @@ module Danger
         end
 
         # To show only versions not commit-hashes
-        if git_version(resolved_version[0])
-          resolved_version = resolved_version[0]
-        else
-          resolved_version = resolved_version[1]
-        end 
+        resolved_version = if git_version(resolved_version[0])
+                             resolved_version[0]
+                           else
+                             resolved_version[1]
+                           end
 
         # kind can be major, minor, range, exact, branch, revision
 
         if kind == "revision" && !git_version(requirement["revision"])
-          warn("#{name}: non-version values in revision are not analyzed: #{requirement["revision"]}")
+          warn("#{name}: non-version values in revision are not analyzed: #{requirement['revision']}")
           next
         end
 
@@ -91,7 +91,7 @@ module Danger
         available_versions = git_versions(repository_url)
         next if available_versions.first.to_s == resolved_version
 
-        if (kind == "exactVersion" || kind == "revision") && @check_when_exact
+        if ["exactVersion", "revision"].include?(kind) && @check_when_exact
           warn_for_new_versions_exact(available_versions, name, resolved_version)
         elsif kind == "upToNextMajorVersion"
           warn_for_new_versions(:major, available_versions, name, resolved_version)
@@ -103,7 +103,7 @@ module Danger
       }
     end
 
-   # Extract a readable name for the repo given the url, generally org/repo
+    # Extract a readable name for the repo given the url, generally org/repo
     # @return [String]
     def repo_name(repo_url)
       match = repo_url.match(%r{([\w-]+/[\w-]+)(.git)?$})
@@ -160,6 +160,7 @@ Newer version of #{name}: #{newest_version} (but this package is set to exact ve
         }
         warn("Newer version of #{name}: #{newest_meeting_reqs} ") unless newest_meeting_reqs.to_s == resolved_version
         return unless report_above_maximum
+
         newest_above_reqs = available_versions.find { |version|
           report_pre_releases ? true : version.pre.nil?
         }
@@ -192,13 +193,13 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
 
     # Assumed using only 3-levels digital version-notation
     def git_version(input)
-      parts = input.split('.')
+      parts = input.split(".")
 
       return nil if parts.length > 3
       return nil unless parts.all? { |part| part.match?(/\A\d+\z/) }
 
       (3 - parts.length).times { parts << "0" }
-      parts.join('.')
+      parts.join(".")
     end
 
     # Remove git call to list tags
@@ -211,10 +212,8 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
           begin
             Semantic::Version.new(line)
           rescue ArgumentError
-            if recovered_version = git_version(line)
+            if (recovered_version = git_version(line))
               Semantic::Version.new(recovered_version)
-            else
-              nil
             end
           end
         }

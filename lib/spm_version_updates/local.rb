@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 def get_local_packages(where_to_search_local_packages)
   get_manifests(where_to_search_local_packages)
     .flat_map { |manifest| get_dependencies(manifest) }
@@ -12,7 +14,7 @@ end
 def get_dependencies(manifest)
   content = File.read(manifest)
   package_name = package_name(content)
-  get_requirement_kinds.each_with_object([]) { |kind, dependencies|
+  requirement_kinds.each_with_object([]) { |kind, dependencies|
     regex = package_regex(kind)
     content.scan(regex).each { |match|
       url = match[0]
@@ -34,14 +36,14 @@ def package_name(content)
   content.scan(/Package\(\s*name:\s*"([^"]+)"/).first.first
 end
 
-def get_requirement_kinds
+def requirement_kinds
   [
     "revision",
     "exact",
     "branch",
     "upToNextMajor",
     "upToNextMinor",
-    "range"
+    "range",
   ]
 end
 
@@ -57,14 +59,14 @@ end
 def package_regex(req_kind)
   indent = '\s*'
   dot = '\.'
-  less = '<'
+  less = "<"
   lp = /\(#{indent}/
   rp = /#{indent}\)/
   req_val = /"([^"]+)"/
 
   base = /#{dot}package#{lp}url:#{indent}#{req_val},#{indent}/
 
-  req_arg = /#{req_kind}:#{indent}#{req_val}/   
+  req_arg = /#{req_kind}:#{indent}#{req_val}/
 
   from = /from:#{indent}#{req_val}/
   up_to_next = /#{dot}#{req_kind}#{lp}#{from}#{rp}/
