@@ -3,6 +3,8 @@
 require "semantic"
 require "xcodeproj"
 
+require_relative "local"
+
 module Danger
   # A plugin for checking if there are versions upgrades available for SPM packages
   #
@@ -34,26 +36,51 @@ module Danger
     # @param   [String] xcodeproj_path
     #          The path to your Xcode project
     # @return   [void]
-    def check_for_updates(xcodeproj_path)
+    def check_for_updates(xcodeproj_path, where_to_search_local_packages = ".")
       raise(XcodeprojPathMustBeSet) if xcodeproj_path.nil?
 
       project = Xcodeproj::Project.open(xcodeproj_path)
-      remote_packages = filter_remote_packages(project)
+      packages = get_local_packages(where_to_search_local_packages) + filter_remote_packages(project)
 
       resolved_path = find_packages_resolved(xcodeproj_path)
       raise(CouldNotFindResolvedFile) unless File.exist?(resolved_path)
 
       resolved_versions = JSON.load_file!(resolved_path)["pins"]
-        .to_h { |pin| [pin["location"], pin["state"]["version"] || pin["state"]["revision"]] }
+        .to_h { |pin|
+          [
+            pin["location"],
+            [
+              pin["state"]["version"] || pin["state"]["revision"],
+              pin["state"]["branch"],
+            ],
+          ]
+        }
 
-      remote_packages.each { |repository_url, requirement|
+      packages.each { |repository_url, requirement|
         next if ignore_repos&.include?(repository_url)
 
-        name = repo_name(repository_url)
-        resolved_version = resolved_versions[repository_url]
+        name = "(#{requirement.fetch('package_name', 'project')}) #{repo_name(repository_url)}"
         kind = requirement["kind"]
 
-        # kind can be major, minor, range, exact, branch, or commit
+        resolved_version = resolved_versions[repository_url]
+        if resolved_version.nil?
+          warn("Unable to locate the current version for #{name} (#{repository_url})")
+          next
+        end
+
+        # To show only versions not commit-hashes
+        resolved_version = if git_version(resolved_version[0])
+                             resolved_version[0]
+                           else
+                             resolved_version[1]
+                           end
+
+        # kind can be major, minor, range, exact, branch, revision
+
+        if kind == "revision" && !git_version(requirement["revision"])
+          warn("#{name}: non-version values in revision are not analyzed: #{requirement['revision']}")
+          next
+        end
 
         if kind == "branch" && check_when_exact
           last_commit = git_branch_last_commit(repository_url, requirement["branch"])
@@ -64,7 +91,7 @@ module Danger
         available_versions = git_versions(repository_url)
         next if available_versions.first.to_s == resolved_version
 
-        if kind == "exactVersion" && @check_when_exact
+        if ["exactVersion", "revision"].include?(kind) && @check_when_exact
           warn_for_new_versions_exact(available_versions, name, resolved_version)
         elsif kind == "upToNextMajorVersion"
           warn_for_new_versions(:major, available_versions, name, resolved_version)
@@ -89,13 +116,15 @@ module Danger
     end
 
     # Find the configured SPM dependencies in the xcodeproj
-    # @return [Hash<String, Hash>]
+    # @return [String, Hash<String, String>]
     def filter_remote_packages(project)
-      project.objects.select { |obj|
-        obj.kind_of?(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference) &&
-          obj.requirement["kind"] != "commit"
-      }
-        .to_h { |package| [package.repositoryURL, package.requirement] }
+      project.objects
+        .select { |obj|
+          obj.kind_of?(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference) &&
+            obj.requirement["kind"] != "commit"
+        }.map { |package|
+          [package.repositoryURL, package.requirement]
+        }
     end
 
     # Find the Packages.resolved file
@@ -130,11 +159,16 @@ Newer version of #{name}: #{newest_version} (but this package is set to exact ve
           version < max_version && (report_pre_releases ? true : version.pre.nil?)
         }
         warn("Newer version of #{name}: #{newest_meeting_reqs} ") unless newest_meeting_reqs.to_s == resolved_version
+        return unless report_above_maximum
+
+        newest_above_reqs = available_versions.find { |version|
+          report_pre_releases ? true : version.pre.nil?
+        }
         warn(
           <<-TEXT
-Newest version of #{name}: #{available_versions.first} (but this package is configured up to the next #{max_version} version)
+Newest version of #{name}: #{newest_above_reqs} (but this package is configured up to the next #{max_version} version)
           TEXT
-        ) if report_above_maximum
+        ) unless newest_above_reqs == newest_meeting_reqs
       end
     end
 
@@ -152,9 +186,20 @@ Newest version of #{name}: #{available_versions.first} (but this package is conf
       }
       warn(
         <<-TEXT
-Newest version of #{name}: #{available_versions.first} (but this package is configured up to the next #{major_or_minor} version)
+Newest version of #{name}: #{newest_above_reqs} (but this package is configured up to the next #{major_or_minor} version)
         TEXT
       ) unless newest_above_reqs == newest_meeting_reqs || newest_meeting_reqs.to_s == resolved_version
+    end
+
+    # Assumed using only 3-levels digital version-notation
+    def git_version(input)
+      parts = input.split(".")
+
+      return nil if parts.length > 3
+      return nil unless parts.all? { |part| part.match?(/\A\d+\z/) }
+
+      (3 - parts.length).times { parts << "0" }
+      parts.join(".")
     end
 
     # Remove git call to list tags
@@ -167,7 +212,9 @@ Newest version of #{name}: #{available_versions.first} (but this package is conf
           begin
             Semantic::Version.new(line)
           rescue ArgumentError
-            nil
+            if (recovered_version = git_version(line))
+              Semantic::Version.new(recovered_version)
+            end
           end
         }
         .sort

@@ -1,3 +1,13 @@
+# Особенности surf version
+В отличие от оригинальной версии, где проверяются только зависимости проекта, в этой версии еще анализируются зависимости локальных пакетов.
+В данный момент поддерживаются следующие варианты объявления зависимости в Package.swift (остальные просто не будут распознаны):
+- ``.package(url:, exact:)``
+- ``.package(url:, revision:)``, в качестве значения ``revision`` поддерживается исключительно версия. Если указан commit-hash, зависимость не будет проверена.
+- ``.package(url:, branch:)``
+- ``.package(url:, from:)``
+- ``.package(url:, .upToNextMinor(from:))``
+- ``.package(url:, .upToNextMajor(from:))``
+- ``.package(url:, ""..<"")``
 # danger-spm_version_updates
 
 [![CI](https://github.com/hbmartin/danger-spm_version_updates/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/hbmartin/danger-spm_version_updates/actions/workflows/lint_and_test.yml)
