@@ -33,7 +33,8 @@ def get_dependencies(manifest)
 end
 
 def package_name(content)
-  content.scan(/Package\(\s*name:\s*"([^"]+)"/).first.first
+  match = content.scan(/Package\(\s*name:\s*"([^"]+)"/).first
+  match ? match.first : "UNKNOWN PACKAGE NAME"
 end
 
 def requirement_kinds
