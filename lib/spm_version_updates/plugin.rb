@@ -87,7 +87,7 @@ module Danger
           warn("Newer commit available for #{name}: #{last_commit}") unless last_commit == resolved_version
           next
         end
-
+  
         available_versions = git_versions(repository_url)
         next if available_versions.first.to_s == resolved_version
 
@@ -196,7 +196,7 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
       parts = input.split(".")
 
       return nil if parts.length > 3
-      return nil unless parts.all? { |part| part.match?(/\A\d+\z/) }
+      return nil unless parts.all? { |part| part.match?(/^(0|[1-9]\d*)$/) }
 
       (3 - parts.length).times { parts << "0" }
       parts.join(".")
@@ -204,22 +204,18 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
 
     # Remove git call to list tags
     # @return [Array<Semantic::Version>]
-    def git_versions(repo_url)
-      `git ls-remote -t #{repo_url}`
-        .split("\n")
-        .map { |line| line.split("/tags/").last }
-        .filter_map { |line|
-          begin
-            Semantic::Version.new(line)
-          rescue ArgumentError
-            if (recovered_version = git_version(line))
-              Semantic::Version.new(recovered_version)
-            end
-          end
-        }
-        .sort
-        .reverse
-    end
+def git_versions(repo_url)
+  `git ls-remote -t #{repo_url}`
+    .split("\n")
+    .map { |line| line.split("/tags/").last }
+    .filter_map { |line|
+      if (version = git_version(line))
+        Semantic::Version.new(version)
+      end
+    }
+    .sort
+    .reverse
+end
 
     def git_branch_last_commit(repo_url, branch_name)
       `git ls-remote -h #{repo_url}`
