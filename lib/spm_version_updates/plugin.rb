@@ -196,7 +196,7 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
       parts = input.split(".")
 
       return nil if parts.length > 3
-      return nil unless parts.all? { |part| part.match?(/\A\d+\z/) }
+      return nil unless parts.all? { |part| part.match?(/^(0|[1-9]\d*)$/) }
 
       (3 - parts.length).times { parts << "0" }
       parts.join(".")
@@ -209,12 +209,8 @@ Newest version of #{name}: #{newest_above_reqs} (but this package is configured 
         .split("\n")
         .map { |line| line.split("/tags/").last }
         .filter_map { |line|
-          begin
-            Semantic::Version.new(line)
-          rescue ArgumentError
-            if (recovered_version = git_version(line))
-              Semantic::Version.new(recovered_version)
-            end
+          if (version = git_version(line))
+            Semantic::Version.new(version)
           end
         }
         .sort

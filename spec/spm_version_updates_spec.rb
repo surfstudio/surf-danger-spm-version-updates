@@ -55,6 +55,27 @@ module Danger
         )
       end
 
+      it "(project) Does work proper when git versions has weird tag" do
+        allow(@my_plugin).to receive_messages(git_versions: [
+          Semantic::Version.new("12.1.6-swift-DEVELOPMENT-SNAPSHOT-2023-01-30-a"),
+          Semantic::Version.new("12.2.0-beta.2"),
+        ].sort.reverse,
+                                              get_local_packages: [])
+
+        @my_plugin.check_when_exact = true
+        @my_plugin.report_pre_releases = true
+        @my_plugin.check_for_updates(
+          "#{File.dirname(__FILE__)}/support/fixtures/project-ExactVersion.xcodeproj",
+          "#{File.dirname(__FILE__)}/support/fixtures/project-ExactVersion.xcodeproj"
+        )
+
+        expect(@dangerfile.status_report[:warnings]).to eq(
+          [
+            "Newer version of (project) kean/Nuke: 12.2.0-beta.2 (but this package is set to exact version 12.1.6)\n",
+          ]
+        )
+      end
+
       it "(project) Does report pre-release versions for exact versions when configured" do
         allow(@my_plugin).to receive_messages(git_versions: [
           Semantic::Version.new("12.1.6"),
